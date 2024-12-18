@@ -1,0 +1,20 @@
+let int a be 1.
+let int b be 1.
+let int c be 1.
+let int d be 1.
+let int x be 1.
+let set a be { a: a > 1}.
+let set b be { a: a > 1}.let int x be 1.
+let int c be 1.
+let int x be 1.
+let int x be 1.
+let int x be 1.
+let set y be { a: a > 1}.
+let set y be { a: a > 1}.let int x be 1.
+let int x be 1.
+let int x be 1.
+let int x be 1.
+let int x be 1.
+let set y be { a: a > 1}.
+let set z be { a: a > 1}.
+show x @ y.

@@ -1,0 +1,118 @@
+[
+    {
+     "token": "let",
+     "lexeme": "let"
+    },
+    {
+     "token": "set",
+     "lexeme": "set"
+    },
+    {
+     "token": "id",
+     "lexeme": "x"
+    },
+    {
+     "token": "be",
+     "lexeme": "be"
+    },
+    {
+     "token": "{",
+     "lexeme": "{"
+    },
+    {
+     "token": "id",
+     "lexeme": "a"
+    },
+    {
+     "token": ":",
+     "lexeme": ":"
+    },
+    {
+     "token": "id",
+     "lexeme": "a"
+    },
+    {
+     "token": ">",
+     "lexeme": ">"
+    },
+    {
+     "token": "num",
+     "lexeme": "3"
+    },
+    {
+     "token": "}",
+     "lexeme": "}"
+    },
+    {
+     "token": ".",
+     "lexeme": "."
+    },
+    {
+     "token": "let",
+     "lexeme": "let"
+    },
+    {
+     "token": "set",
+     "lexeme": "set"
+    },
+    {
+     "token": "id",
+     "lexeme": "y"
+    },
+    {
+     "token": "be",
+     "lexeme": "be"
+    },
+    {
+     "token": "{",
+     "lexeme": "{"
+    },
+    {
+     "token": "id",
+     "lexeme": "a"
+    },
+    {
+     "token": ":",
+     "lexeme": ":"
+    },
+    {
+     "token": "id",
+     "lexeme": "a"
+    },
+    {
+     "token": "<",
+     "lexeme": "<"
+    },
+    {
+     "token": "num",
+     "lexeme": "5"
+    },
+    {
+     "token": "}",
+     "lexeme": "}"
+    },
+    {
+     "token": ".",
+     "lexeme": "."
+    },
+    {
+     "token": "show",
+     "lexeme": "show"
+    },
+    {
+     "token": "id",
+     "lexeme": "x"
+    },
+    {
+     "token": "I",
+     "lexeme": "I"
+    },
+    {
+     "token": "id",
+     "lexeme": "y"
+    },
+    {
+     "token": ".",
+     "lexeme": "."
+    }
+   ]
