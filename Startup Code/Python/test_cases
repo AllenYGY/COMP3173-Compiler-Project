@@ -1,3 +1,3 @@
-let int x be 3.
-let int x be 4.
-show x+x*x-x .
+let int x be 1.
+let set y be { a: a > 1}.
+show x @ y.

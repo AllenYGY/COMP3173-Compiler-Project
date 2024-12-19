@@ -4,7 +4,6 @@ from parser import Parser, SLRParserTable
 import sys
 import json
 
-# sys.setrecursionlimit(1999999999)
 # WARNING:
 # - You are not allowed to use any external libraries other than the standard library
 # - Please do not modify the file name of the entry file 'main.py'
@@ -35,26 +34,15 @@ def update_token_type(parse_tree: dict | list):
                 update_token_type(item)
     except KeyError:
         raise ValueError("Invalid parse tree format")
-
-def non_recursive_json_dump(data, file_path):
-    try:
-        stack = [(data, {})]
-        while stack:
-            obj, result = stack.pop()
-            for key, value in obj.items():
-                if isinstance(value, dict):
-                    new_dict = {}
-                    result[key] = new_dict
-                    stack.append((value, new_dict))
-                else:
-                    result[key] = value
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-
-    except Exception as e:
-        # print(f"Error: {e}")
-        ...
-
+    
+def check_simplify(tokens):
+    flag=False 
+    for token in tokens:
+        if "simplify" in token.lexeme:
+            token.lexeme = "simplify"
+            token.token_type = "show"
+            flag=True
+    return flag    
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
@@ -66,23 +54,35 @@ if __name__ == '__main__':
         source_code = f.read()
         file_path = 'SLR Parsing Table.csv'
         grammar_path = 'SLR Grammar.txt'
-        lexer = Lexer(source_code)
-        tokens,symbol_table = lexer.tokenize()
-        lexer_ouput = [token.to_dict() for token in tokens]
-        with open("lexer_out.json", "w", encoding="utf-8") as f:
-            json.dump(lexer_ouput, f, ensure_ascii=False, indent=0)
-        tokens.append(Token(token_type="$",lexeme="$",value="$"))
-        slr_table = SLRParserTable(file_path, grammar_path)
-        actions,goto,rules=slr_table.ACTION,slr_table.GOTO,slr_table.grammar
-        simplified_rules = {}
-        for rule_number, details in rules.items():
-            simplified_rules[rule_number] = (details['non-terminal'], details['length'])
-        # parser=Parser(tokens,actions, goto, rules, symbol_table)
-        parser=Parser(tokens,actions, goto, rules)
-        parse_tree=parser.parse()
-        with open("parser_out.json", "w", encoding="utf-8") as f:
-            json.dump(parse_tree, f, ensure_ascii=False, indent=0)
-        typeing_tree =parser.typecheck()
-        with open("typing_out.json", "w", encoding="utf-8") as f:
-            json.dump(typeing_tree, f, ensure_ascii=False, indent=0)
+
+    lexer = Lexer(source_code)
+    tokens,symbol_table = lexer.tokenize()
+    lexer_ouput = [token.to_dict() for token in tokens]
+    with open("lexer_out.json", "w", encoding="utf-8") as f:
+        json.dump(lexer_ouput, f, ensure_ascii=False, indent=0)
+
+    flag = check_simplify(tokens)
+    tokens.append(Token(token_type="$",lexeme="$",value="$"))
+
+    slr_table = SLRParserTable(file_path, grammar_path)
+    actions,goto,rules=slr_table.ACTION,slr_table.GOTO,slr_table.grammar
+    parser=Parser(tokens,actions, goto, rules)
+
+
+    parse_tree=parser.parse()
+    if flag:
+        update_token_type(parse_tree)
+
+    with open("parser_out.json", "w", encoding="utf-8") as f:
+        json.dump(parse_tree, f, ensure_ascii=False, indent=0)
+    typeing_tree =parser.typecheck()
+    if flag:
+        update_token_type(typeing_tree)
+    with open("typing_out.json", "w", encoding="utf-8") as f:
+        json.dump(typeing_tree, f, ensure_ascii=False, indent=0)
+    evaluation_tree = parser.evaluate()
+    if flag:
+        update_token_type(evaluation_tree)
+    with open("evaluation_out.json", "w", encoding="utf-8") as f:
+        json.dump(evaluation_tree, f, ensure_ascii=False, indent=0)
 

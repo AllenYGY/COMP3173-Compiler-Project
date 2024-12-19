@@ -83,8 +83,11 @@ if __name__ == '__main__':
     parser_ans = file_path+'parser_ans.json'
     typing_output = file_path+'typing_out.json'
     typing_ans = file_path+'typing_ans.json'
+    evaluate_output = file_path+'evaluation_out.json'
+    evaluate_ans = file_path+'evaluation_ans.json'
     # Run comparison
     compare_json_files(lexer_ouput, lexer_ans)
     compare_json_files(parser_output, parser_ans)
     compare_json_files(typing_output,typing_ans)
+    compare_json_files(evaluate_output,evaluate_ans)
 
