@@ -82,7 +82,6 @@ class Parser:
             "A:E": lambda E: str(E["value"]),
             "A:P": lambda P: "true" if eval(P["value"]) else "false",
         }
-
         self.new_evaluation_rules = {
             "S':S": lambda S: S["value"],
             "S:D' C .": lambda D_prime, C, _: C["value"],
