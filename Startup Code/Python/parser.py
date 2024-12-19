@@ -46,8 +46,47 @@ class Parser:
             "A:E": lambda E: "calculation" if E["type"] != "type_error" else "type_error",
             "A:P": lambda P: "calculation" if P["type"] != "type_error" else "type_error",
         }
+        
+        self.evaluation_rules = {
+            "S':S": lambda S: S["value"],
+            "S:D' C .": lambda D_prime, C, _: C["value"],
+            "S:C .": lambda C, _: C["value"],
+            "D':D D'": lambda D, D_prime_2: D_prime_2["value"],
+            "D':D": lambda D: D["value"],
+            "D:let T id be E .": lambda let, T, id, be, E, _: "void",
+            "T:int": lambda _: "void",
+            "T:set": lambda _: "void",
+            "E:E'": lambda E_prime: E_prime["value"],
+            "E:E U E'": lambda E, _, E_prime: f"({E['value']} U {E_prime['value']})",
+            "E:E + E'": lambda E, _, E_prime: E["value"] + E_prime["value"],
+            "E:E - E'": lambda E, _, E_prime: E["value"] - E_prime["value"],   
+            "E':E''": lambda E_double_prime: E_double_prime["value"],
+            "E':E' I E''": lambda E_prime, _, E_double_prime: f"{E_prime['value']} I {E_double_prime['value']}",
+            "E':E' * E''": lambda E_prime, _, E_double_prime: E_prime["value"] * E_double_prime["value"],
+            "E'':num": lambda num: num["lexeme"],
+            "E'':id": lambda id: self.symbol_table.get(id["lexeme"], {}).get("value", None) or id["lexeme"],
+            # "E'':( E )": lambda _, E, x: f"( {E["value"]} )",
+            "E'':( E )": lambda _, E, x: f'( {E["value"]} )',
+            "E'':{ Z P }": lambda _, Z, P, x: f"{{ {Z['value']}: {P['value']} }}",
+            "Z:id :": lambda id, _: id["lexeme"], 
+            "P:P | P'": lambda P2, _, P_prime: f"{P_prime['value']} | {P_prime['value']}",
+            "P:P'": lambda P_prime: P_prime["value"],
+            "P':P' & P''": lambda P_prime, _, P_double_prime: f"{P_prime['value']} & {P_double_prime['value']}",
+            "P':P''": lambda P_double_prime: P_double_prime["value"],
+            "P'':R": lambda R: R["value"],
+            "P'':( P )": lambda _, P, x: f'({P["value"]})',
+            "P'':! R": lambda _, R: f'! {R["value"]}',
+            "R:E < E": lambda E1, _, E2: f"{E1['value']} < {E2['value']}",
+            "R:E > E": lambda E1, _, E2: f"{E1['value']} > {E2['value']}",
+            "R:E = E": lambda E1, _, E2: f"{E1['value']} = {E2['value']}",
+            "R:E @ E": lambda E1, _, E2: f"{E1['value']} @ {E2['value']}",
+            "C:show A": lambda _, A: A["value"],
+            "A:E": lambda E: E["value"],
+            "A:P": lambda P: "true" if eval(P["value"]) else "false",
+        }
 
-    def add_type(self, id: dict, type: str):
+
+    def add_type(self, id: dict, type: str, value=None):
         """
         将标识符和类型添加到符号表。
         参数:
@@ -61,13 +100,11 @@ class Parser:
         if not id_name:  # 如果标识符的名字为空
             print(f"Error: Missing lexeme for identifier: {id}")
             return "type_error"
-        # 检查是否已在符号表中
 
         # if id_name in self.symbol_table:
         #     raise ValueError(f"Variable '{id_name}' is already declared.")
-        # 添加到符号表
         
-        self.symbol_table[id_name] = {"type": type, "value": None}
+        self.symbol_table[id_name] = {"type": type, "value": value}
         # print(f"Added variable '{id_name}' with type '{type}' to symbol table.")
         return "void"
 
@@ -106,7 +143,6 @@ class Parser:
         if not symbol_entry:  # 如果未找到
             return "type_error"
 
-        # 提取类型字段并检查是否为 None
         symbol_type = symbol_entry.get("type", "type_error")
         if symbol_type is None:
             return "type_error"
@@ -226,6 +262,83 @@ class Parser:
                     f.write(str(json_output))
                 return []
         return typecheck_tree
+    
+    def evaluate(self):
+        self.index = 0
+        self.stack = [(0, None)] 
+        current_token = self.tokens[self.index] if self.index < len(self.tokens) else None
+        evaluate_tree = None
+        while True:
+            state = self.stack[-1][0] 
+            action, value = self.actions.get(
+                (state, current_token.token_type if current_token else "$"), (None, None)
+            )
+            # print(action, value)
+            try:
+                if action is None:
+                    raise SyntaxError(f"Syntax Error: Unexpected token '{current_token.lexeme}' at state {state}.")
+                if action == "s": 
+                    evaluation_value = "void"  
+                    if current_token.token_type == "num":
+                        evaluation_value = current_token.lexeme
+                    # elif current_token.token_type == "id":
+                        # print(current_token.lexeme,current_token.token_type)
+                        # print(self.symbol_table)
+                    leaf_node = {
+                        "token": current_token.token_type,
+                        "lexeme": current_token.lexeme,
+                        "value": evaluation_value,
+                    }
+                    self.stack.append((value, leaf_node))
+                    self.index += 1
+                    current_token = self.tokens[self.index] if self.index < len(self.tokens) else None
+
+                elif action == "r": 
+                    lhs, productions, rhs_length = (
+                        self.rules[value]["non-terminal"],
+                        self.rules[value]["productions"],
+                        self.rules[value]["length"],
+                    )
+
+                    key = f"{lhs}:{productions}"  # 类型规则的键
+                    type_children = []  # 用于存储子节点的类型信息
+                    for _ in range(rhs_length):
+                        _, child_node = self.stack.pop()
+                        type_children.insert(0, child_node)
+                    # print(key)
+                    if key == "D:let T id be E .":
+                        id_node = type_children[2]  # 获取标识符节点
+                        expression_node = type_children[4]  # 获取表达式节点
+                        self.symbol_table[id_node["lexeme"]] = {
+                            "type": type_children[1]["value"],  # 变量的类型
+                            "value": expression_node["value"],  # 变量的值
+                        }
+                    if key in self.evaluation_rules:
+                        evaluation_value = self.evaluation_rules[key](*type_children)  # 应用类型规则
+                    else:
+                        raise TypeError(f"Typing rule for {key} not defined.")
+                    subtree = {
+                        "name": lhs,
+                        "value": evaluation_value, 
+                        "children": type_children,
+                    }
+                    state = self.stack[-1][0]
+                    self.stack.append((self.goto[(state, lhs)], subtree))
+                elif action == "acc":
+                    print("Evaluation Analysis Complete!")
+                    _, evaluate_tree = self.stack[-1]
+                    # print first node value
+                    print(evaluate_tree["value"])
+                    break
+            except (SyntaxError, TypeError) as e:
+                print("Semantic Error!")
+                print(e)
+                json_output = []
+                with open('typing_out.json', 'w') as f:
+                    f.write(str(json_output))
+                return []
+        return evaluate_tree
+
 
 class SLRParserTable:
     def __init__(self, file_path: str, grammar_path: str = None):
@@ -307,9 +420,9 @@ class SLRParserTable:
 if __name__ == '__main__':
     file_path = 'SLR Parsing Table.csv'
     grammar_path = 'SLR Grammar.txt'
-    # test_case = "let int x be 1. let set y be { a: a > 1}. show x @ y."
-    # test_case="let int x be 1.let set y be { a: a > 1}.show x @ y."
-    test_case = "let int x be 1. show x."
+    test_case = "let int x be 1. let set y be { a: a > 1}. show y."
+    # test_case = "let int x be 1. show x."
+    # test_case ="show 3>5."
     lexer = Lexer(test_case)
     tokens, symbol_table = lexer.tokenize()
     lexer_ouput = [token.to_dict() for token in tokens]
@@ -334,5 +447,10 @@ if __name__ == '__main__':
     typeing_tree=parser.typecheck()
     with open("typing_out.json", "w", encoding="utf-8") as f:
         json.dump(typeing_tree, f, ensure_ascii=False, indent=4)
-    print(parser.symbol_table)
+    evaluation_tree=parser.evaluate()
+    with open("evaluation_out.json", "w", encoding="utf-8") as f:
+        json.dump(evaluation_tree, f, ensure_ascii=False, indent=4)
+    # print(parser.symbol_table)
+    
+
 
