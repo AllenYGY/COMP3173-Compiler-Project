@@ -124,6 +124,7 @@ class Parser:
             "R:E < E": lambda E1, _, E2: (f"{E1['value']} < {E2['value']}", E1["value"]<E2["value"]),
             "R:E > E": lambda E1, _, E2: (f"{E1['value']} > {E2['value']}", E1["value"]> E2["value"]),
             "R:E = E": lambda E1, _, E2: (f"{E1['value']} = {E2['value']}", E1["value"]== E2["value"]),
+            # "R:E @ E": lambda E1, x, E2: (f"{E1['value']} @ {E2['value']}", self.evaluate_predicate(E1["value"], E2["value"])),
             "R:E @ E": lambda E1, _, E2: (f"{E1['value']} @ {E2['value']}", self.evaluate_predicate(E1["value"], E2["value"])),
             "C:show A": lambda _, A: A["value"],
             "A:E": lambda E: str(E["value"]),
@@ -132,7 +133,7 @@ class Parser:
             # "A:P": lambda P: "true" if eval(P["value"]) else "false",
         }
     
-    def evaluate_predicate(element, predicate_expression):
+    def evaluate_predicate(self,element, predicate_expression):
         """
         动态解析并计算谓词表达式，支持不定长度的逻辑条件。
         :param element: 单一值，例如 `3`
@@ -140,6 +141,10 @@ class Parser:
         :return: 布尔值，判断结果
         """
         import re
+        # 去除多余空格
+        # predicate_expression = re.sub(r"\s+", " ", predicate_expression).strip()
+        predicate_expression=re.sub(r"\s+", "", predicate_expression).strip()
+        # 匹配变量和谓词
         match = re.match(r"\{(\w+)\s*:\s*(.+)\}", predicate_expression)
         if not match:
             raise ValueError(f"Invalid predicate expression: {predicate_expression}")
@@ -157,7 +162,8 @@ class Parser:
             result = eval(predicate, {}, local_namespace)
         except Exception as e:
             raise ValueError(f"Error evaluating predicate '{predicate_expression}' with element '{element}': {e}")
-        return result 
+        
+        return result
 
     def add_type(self, id: dict, type: str):
         """
@@ -232,7 +238,7 @@ class Parser:
         while True:
             state = self.stack[-1][0]  
             action, value = self.actions.get((state, current_token.token_type if current_token else "$"), (None, None))
-            print(f"Current state: {state}, Current token: {current_token.lexeme if current_token else 'EOF'}, Action: {action}, Value: {value}")
+            # print(f"Current state: {state}, Current token: {current_token.lexeme if current_token else 'EOF'}, Action: {action}, Value: {value}")
             try:
                 if action is None:
                     raise ValueError(f"Syntax Error: Unexpected token '{current_token.lexeme if current_token else 'EOF'}' at state {state}. Stack: {self.stack}")
@@ -340,10 +346,9 @@ class Parser:
                 return []
         return typecheck_tree
 
-    def evaluate(self):
+    def evaluate_0(self):
         self.index = 0
         self.stack = [(0, None)] 
-        # self.extra_stack = [(0, None)] 
         current_token = self.tokens[self.index] if self.index < len(self.tokens) else None
         evaluate_tree = None
         while True:
@@ -351,29 +356,105 @@ class Parser:
             action, value = self.actions.get(
                 (state, current_token.token_type if current_token else "$"), (None, None)
             )
-            print(f"Current state: {state}, Current token: {current_token.lexeme if current_token else 'EOF'}, Action: {action}, Value: {value}")
             if action is None:
                     raise SyntaxError(f"Unexpected token '{current_token.lexeme}' at state {state}.")
             try:
-                
                 if action == "s": 
                     evaluation_value = "void"  
-
                     if current_token.token_type == "num":
                         evaluation_value = current_token.lexeme
                     leaf_node = {
                         "token": current_token.token_type,
                         "lexeme": current_token.lexeme,
                         "value": evaluation_value,
-                    }
-                    extra_leaf_node = {
-                        "token": current_token.token_type,
-                        "lexeme": current_token.lexeme,
-                        "value": evaluation_value,
                         "bool": "undefined",
                     }
                     self.stack.append((value, leaf_node))
-                    self.extra_stack.append((value, extra_leaf_node))
+                    self.index += 1
+                    current_token = self.tokens[self.index] if self.index < len(self.tokens) else None
+                elif action == "r": 
+                    lhs, productions, rhs_length = (
+                        self.rules[value]["non-terminal"],
+                        self.rules[value]["productions"],
+                        self.rules[value]["length"],
+                    )
+                    key = f"{lhs}:{productions}"  # 类型规则的键
+                    type_children = []  # 用于存储子节点的类型信息
+                    for _ in range(rhs_length):
+                        _, child_node = self.stack.pop()
+                        type_children.insert(0, child_node)
+                    if key == "D:let T id be E .":
+                        id_node = type_children[2]  # 获取标识符节点
+                        expression_node = type_children[4]  # 获取表达式节点
+                        self.symbol_table[id_node["lexeme"]] = {
+                            "type": type_children[1]["value"],  # 变量的类型
+                            "value": expression_node["value"],  # 变量的值
+                        }
+                    if key in self.new_evaluation_rules:
+                        evaluation_value = self.new_evaluation_rules[key](*type_children)  # 应用类型规则
+                        bool_value = "undefined"
+                        # if return a tuple
+                        if isinstance(evaluation_value, tuple):
+                            evaluation_value, bool_value = evaluation_value
+                        
+                    else:
+                        raise TypeError(f"Typing rule for {key} not defined.")
+                    subtree = {
+                        "name": lhs,
+                        "value": evaluation_value, 
+                        "bool": bool_value,
+                        "children": type_children,
+                    }
+                    state = self.stack[-1][0]
+                    self.stack.append((self.goto[(state, lhs)], subtree))
+                elif action == "acc":
+                    print("Evaluation Analysis Complete!")
+                    _, evaluate_tree = self.stack[-1]
+                    print(evaluate_tree["value"])
+                    break
+            except (SyntaxError, TypeError) as e:
+                print("Semantic Error!")
+        return evaluate_tree
+    def remove_bool_attributes(self,node):
+        """
+        递归地遍历树并删除所有的 'bool' 属性。
+        :param node: 当前节点，可能是一个字典或列表。
+        :return: 去除了 'bool' 属性的节点。
+        """
+        if isinstance(node, dict):
+            # 如果是字典，删除 'bool' 键，并递归处理其值
+            node.pop('bool', None)  # 删除 'bool' 属性
+            for key in node:
+                node[key] = self.remove_bool_attributes(node[key])
+        elif isinstance(node, list):
+            # 如果是列表，递归处理每个元素
+            node = [self.remove_bool_attributes(child) for child in node]
+        return node
+    
+    def evaluate(self):
+        self.index = 0
+        self.stack = [(0, None)] 
+        current_token = self.tokens[self.index] if self.index < len(self.tokens) else None
+        evaluate_tree = None
+        while True:
+            state = self.stack[-1][0] 
+            action, value = self.actions.get(
+                (state, current_token.token_type if current_token else "$"), (None, None)
+            )
+            if action is None:
+                raise SyntaxError(f"Unexpected token '{current_token.lexeme}' at state {state}.")
+            try:
+                if action == "s": 
+                    evaluation_value = "void"
+                    if current_token.token_type == "num":
+                        evaluation_value = current_token.lexeme
+                    leaf_node = {
+                        "token": current_token.token_type,
+                        "lexeme": current_token.lexeme,
+                        "value": evaluation_value,
+                        "bool": None,  # 默认设置为 None
+                    }
+                    self.stack.append((value, leaf_node))
                     self.index += 1
                     current_token = self.tokens[self.index] if self.index < len(self.tokens) else None
 
@@ -383,56 +464,59 @@ class Parser:
                         self.rules[value]["productions"],
                         self.rules[value]["length"],
                     )
-                    key = f"{lhs}:{productions}"  
-                    print(key)
-                    type_children = []  
-                    extra_type_children = []
+                    key = f"{lhs}:{productions}"  # 类型规则的键
+                    
+                    if len(self.stack) < rhs_length:
+                        raise ValueError("Stack underflow: Not enough elements to pop for the current rule.")
+
+                    type_children = []
                     for _ in range(rhs_length):
                         _, child_node = self.stack.pop()
-                        # _, extra_child_node = self.extra_stack.pop()
                         type_children.insert(0, child_node)
-                        # extra_type_children.insert(0, extra_child_node)
 
                     if key == "D:let T id be E .":
-                        id_node = type_children[2]  # 获取标识符节点
-                        expression_node = type_children[4]  # 获取表达式节点
+                        id_node = type_children[2]
+                        expression_node = type_children[4]
+                        if "value" not in type_children[1] or "value" not in expression_node:
+                            raise ValueError("Invalid value or type when updating symbol table.")
                         self.symbol_table[id_node["lexeme"]] = {
-                            "type": type_children[1]["value"],  # 变量的类型
-                            "value": expression_node["value"],  # 变量的值
+                            "type": type_children[1]["value"],
+                            "value": expression_node["value"],
                         }
-                    if key in self.evaluation_rules:
-                        evaluation_value = self.evaluation_rules[key](*extra_type_children)  # 应用类型规则
-                        bool_value = "undefined"  
-                        # if return a tuple 
+                    # print(f"Applying rule: {key}")
+                    # print(f"Children: {type_children}, lenth:{len(type_children)}")
+                    # print("===========================================")                   
+                    if key in self.new_evaluation_rules:
+                        evaluation_value = self.new_evaluation_rules[key](*type_children)
+                        # print("1111")
+                        bool_value = None
                         if isinstance(evaluation_value, tuple):
                             evaluation_value, bool_value = evaluation_value
+                        bool_value = bool_value if isinstance(bool_value, bool) else "undefined"
                     else:
                         raise TypeError(f"Typing rule for {key} not defined.")
-                    extra_leaf_node = {
-                        "token": lhs,
-                        "lexeme": productions,
-                        "value": evaluation_value,
-                        "bool": bool_value,
-                    }
+
                     subtree = {
                         "name": lhs,
-                        "value": evaluation_value, 
+                        "value": evaluation_value,
+                        "bool": bool_value,
                         "children": type_children,
                     }
                     state = self.stack[-1][0]
                     self.stack.append((self.goto[(state, lhs)], subtree))
-                    self.extra_stack.append((self.goto[(state, lhs)], extra_leaf_node))
+
                 elif action == "acc":
                     print("Evaluation Analysis Complete!")
                     _, evaluate_tree = self.stack[-1]
-                    print(evaluate_tree["value"])
+                    evaluate_tree=self.remove_bool_attributes(evaluate_tree)
+                    print(f"Final Value: {evaluate_tree['value']}")
+                    # print(f"Final Boolean: {evaluate_tree.get('bool', 'undefined')}")
                     break
-            except (SyntaxError, TypeError) as e:
-                print("Semantic Error!")
 
+            except (SyntaxError, TypeError, ValueError) as e:
+                print(f"Semantic Error: {e}")
+                break
         return evaluate_tree
-
-    
 
 class SLRParserTable:
     def __init__(self, file_path: str, grammar_path: str = None):
@@ -515,8 +599,8 @@ if __name__ == '__main__':
     file_path = 'SLR Parsing Table.csv'
     grammar_path = 'SLR Grammar.txt'
     # test_case = "let int x be 1. let set y be { a: a > 1}. show x @ y."
-    test_case="let int x be 1.let set y be { a: a > 1}.show x @ y."
-    test_case = "let int x be 1. let set y be { a: a > 1 }. show x @ y. "
+    # test_case="let int x be 1.let set y be { a: a > 1}.show x @ y."
+    test_case = "let int x be 2. let set y be { a: a > 1 }. show x @ y. "
     # test_case = "let int x be 1. show x."
     lexer = Lexer(test_case)
     tokens, symbol_table = lexer.tokenize()
@@ -545,4 +629,4 @@ if __name__ == '__main__':
     evaluation_tree=parser.evaluate()
     with open("evaluation_out.json", "w", encoding="utf-8") as f:
         json.dump(evaluation_tree, f, ensure_ascii=False, indent=4)
-    print(parser.symbol_table)
+    # print(parser.symbol_table)
