@@ -85,4 +85,5 @@ if __name__ == '__main__':
         update_token_type(evaluation_tree)
     with open("evaluation_out.json", "w", encoding="utf-8") as f:
         json.dump(evaluation_tree, f, ensure_ascii=False, indent=0)
+    # print(parser.symbol_table)
 

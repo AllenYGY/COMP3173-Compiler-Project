@@ -1,4 +1,1 @@
-let int x be 1.
-let set y be { a: a > 1}.
-let set y be { a: a > 1}.
-show x @ y.
+show (4 + 4 )-(4)*(4).
